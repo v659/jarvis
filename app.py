@@ -18,7 +18,7 @@ def index():
 def ask():
     user_input = request.json.get('message')
     if not user_input:
-        return jsonify({"response": "I didn't get that."})
+        return jsonify({"response": "⚠️ I didn't get that."})
 
     try:
         result = handle_command(user_input)
@@ -29,7 +29,7 @@ def ask():
 
         return jsonify({"response": result})
     except Exception as e:
-        return jsonify({"response": f"Error: {str(e)}"})
+        return jsonify({"response": f"❌ Error: {str(e)}"})
 
 @app.route('/toggle_listen', methods=['POST'])
 def toggle_listen():
