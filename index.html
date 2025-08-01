@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Jarvis AI Assistant</title>
+  <link rel="stylesheet" href="static/css/style.css" />
+  <style>
+    .mic-button {
+      background: none;
+      border: none;
+      font-size: 1.4rem;
+      color: #00ffff;
+      cursor: pointer;
+      padding: 0 0.5rem;
+      transition: transform 0.2s ease;
+    }
+
+    .mic-button.listening {
+      animation: glowPulse 1s infinite;
+      color: #ff0080;
+    }
+
+    .toggle-container {
+      text-align: center;
+      margin: 10px 0;
+    }
+
+    .toggle-container label {
+      font-size: 0.9rem;
+      color: #ccc;
+    }
+
+    .chat-window div {
+      opacity: 0;
+      transform: translateY(10px);
+      animation: slideIn 0.3s ease forwards;
+    }
+
+    @keyframes slideIn {
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .clear-chat {
+      background-color: #111;
+      color: #fff;
+      border: none;
+      padding: 5px 10px;
+      margin-bottom: 10px;
+      cursor: pointer;
+      font-size: 0.8rem;
+      border-radius: 5px;
+    }
+  </style>
+</head>
+<body>
+  <div class="side-orb left"></div>
+  <div class="side-orb right"></div>
+
+  <div class="jarvis-wrapper">
+    <div class="jarvis-header">
+      <h1>🧠 JARVIS</h1>
+      <p class="subtext">Your virtual assistant</p>
+    </div>
+
+    <!-- 🎤 Toggle -->
+    <div class="toggle-container">
+      <label>
+        <input type="checkbox" id="listening-toggle" checked />
+        🎤 Always Listening
+      </label>
+      <button class="clear-chat" onclick="clearChat()">🗑️ Clear Chat</button>
+    </div>
+
+    <div class="chat-window" id="chatbox">
+      <div class="jarvis"><span>🤖 Jarvis:</span> Hello! How can I help you today?</div>
+    </div>
+
+    <form id="chat-form" autocomplete="off">
+      <input type="text" id="user-input" placeholder="Type a message or command..." autofocus />
+      <button type="button" id="mic" class="mic-button" title="Speak"><span id="mic-icon">🎤</span></button>
+      <button type="submit">➤</button>
+    </form>
+  </div>
+
+  <!-- 🔊 Wakeword Sound -->
+  <audio id="wake-sound" src="static/sounds/activate.mp3" preload="auto"></audio>
+
+  <script>
+    const form = document.getElementById('chat-form');
+    const input = document.getElementById('user-input');
+    const chatbox = document.getElementById('chatbox');
+    const micBtn = document.getElementById('mic');
+    const micIcon = document.getElementById('mic-icon');
+    const wakeSound = document.getElementById('wake-sound');
+
+    function appendMessage(role, text) {
+      const roleClass = role === "user" ? "user" : "jarvis";
+      chatbox.innerHTML += `<div class="${roleClass}"><span>${role === "user" ? "🧑 You:" : "🤖 Jarvis:"}</span> ${text}</div>`;
+      chatbox.scrollTop = chatbox.scrollHeight;
+    }
+
+    function clearChat() {
+      chatbox.innerHTML = `<div class="jarvis"><span>🤖 Jarvis:</span> Hello! How can I help you today?</div>`;
+    }
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const recognition = SpeechRecognition ? new SpeechRecognition() : null;
+
+    if (recognition) {
+      recognition.continuous = false;
+      recognition.interimResults = true;
+      recognition.lang = 'en-US';
+
+      let transcriptBuffer = "";
+
+      recognition.onstart = () => {
+        micBtn.classList.add('listening');
+        micIcon.textContent = '🔴';
+      };
+
+      recognition.onend = () => {
+        micBtn.classList.remove('listening');
+        micIcon.textContent = '🎤';
+        input.value = transcriptBuffer.trim();
+        transcriptBuffer && form.requestSubmit();
+        transcriptBuffer = "";
+      };
+
+      recognition.onresult = (event) => {
+        const partial = Array.from(event.results)
+          .map(r => r[0].transcript)
+          .join("");
+        input.value = partial;
+        transcriptBuffer = partial;
+      };
+
+      micBtn.addEventListener('click', () => {
+        wakeSound.play(); // 🔊 Play wake sound
+        recognition.start();
+      });
+    } else {
+      micBtn.disabled = true;
+      micIcon.textContent = '❌';
+      micBtn.title = 'Speech Recognition not supported in this browser.';
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const message = input.value.trim();
+      if (!message) return;
+
+      appendMessage("user", message);
+      input.value = '';
+
+      chatbox.innerHTML += `<div class="jarvis typing"><span>🤖 Jarvis:</span> <span class="typing-dots">Thinking...</span></div>`;
+      chatbox.scrollTop = chatbox.scrollHeight;
+
+      try {
+        const response = await fetch('/ask', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message })
+        });
+
+        const data = await response.json();
+        document.querySelector('.jarvis.typing')?.remove();
+        appendMessage("jarvis", data.response);
+
+      } catch (err) {
+        document.querySelector('.jarvis.typing')?.remove();
+        appendMessage("jarvis", "Sorry, there was an error.");
+      }
+    });
+
+    // 🔁 Poll chatlog
+    setInterval(async () => {
+      try {
+        const res = await fetch('/chatlog');
+        const data = await res.json();
+        const latestMessages = data.messages.join("").trim();
+        const lastLine = latestMessages.split('\n').slice(-1)[0];
+        const alreadyInChat = chatbox.innerText.trim().endsWith(lastLine);
+        if (!alreadyInChat && lastLine) {
+          appendMessage("jarvis", lastLine.replace('🤖 Jarvis: ', ''));
+        }
+      } catch (err) {
+        console.error("Polling error", err);
+      }
+    }, 3000);
+
+    // 🎛️ Always Listening Toggle
+    document.getElementById('listening-toggle').addEventListener('change', async (e) => {
+      const enabled = e.target.checked;
+      try {
+        await fetch('/toggle_listen', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ enabled })
+        });
+      } catch (err) {
+        alert("⚠️ Couldn't update listening mode.");
+      }
+    });
+  </script>
+</body>
+</html>
