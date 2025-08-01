@@ -7,9 +7,9 @@ import re
 import pyttsx3
 import threading
 hotword_thread = None
-stop_listening = False  
+stop_listening = False  # Global flag
 # Initialize text-to-speech
-engine = pyttsx3.init(driverName='nsss')  
+engine = pyttsx3.init(driverName='nsss')  # macOS specific
 engine.setProperty('rate', 180)
 # Ensure chatlog file exists
 if not os.path.exists("chatlog.txt"):
@@ -298,20 +298,20 @@ def log_response(text):
     try:
         with open("chatlog.txt", "r") as f:
             lines = f.readlines()
-        if lines and lines[-1].strip() == f"Jarvis: {text}".strip():
-            return  
+        if lines and lines[-1].strip() == f"🤖 Jarvis: {text}".strip():
+            return  # Don't log duplicate
     except FileNotFoundError:
-        pass 
+        pass  # File will be created
 
     with open("chatlog.txt", "a") as f:
-        f.write(f"Jarvis: {text}\n")
+        f.write(f"🤖 Jarvis: {text}\n")
 def run_jarvis():
-    print("Jarvis is always listening. Say 'Jarvis' to activate me. Say 'exit' anytime to quit.")
+    print("🤖 Jarvis is always listening. Say 'Jarvis' to activate me. Say 'exit' anytime to quit.")
 
     def on_hotword():
         user_input = get_voice_input()
         if not user_input:
-            print("Jarvis: I didn’t catch that.")
+            print("🤖 Jarvis: I didn’t catch that.")
             return
 
         if user_input.lower() in ["exit", "quit", "goodbye"]:
@@ -323,8 +323,9 @@ def run_jarvis():
         if len(result.split()) <= 15:
             speak(result)
         else:
-            print(f"Jarvis: {result}")
+            print(f"🤖 Jarvis: {result}")
 
+        # ➕ NEW: log result to file for frontend
         log_response(result)
 
     try:
@@ -341,9 +342,9 @@ def toggle_listening(enabled: bool) -> bool:
         if not hotword_thread or not hotword_thread.is_alive():
             hotword_thread = threading.Thread(target=hotword_listener, kwargs={"callback": on_wake_word}, daemon=True)
             hotword_thread.start()
-            print("Hotword listener started.")
+            print("🎤 Hotword listener started.")
     else:
-        print("Hotword listener stopped.")
+        print("🔇 Hotword listener stopped.")
     return True
 
 if __name__ == "__main__":
